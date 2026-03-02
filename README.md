@@ -1,85 +1,91 @@
-# LD50Predict
+# LD50
 
-Single-turn OpenReward environment for predicting acute oral toxicity (LD50) of molecules from SMILES notation.
+[![OpenReward Environment](https://img.shields.io/badge/%E2%AD%90%20OpenReward-Environment-f7e6cc)](https://openreward.ai/GeneralReasoning/LD50)
 
-## Task
+## Description
 
-Given a molecule's SMILES string, the agent predicts the LD50 value in log(1/(mol/kg)). LD50 is the dose required to kill 50% of a test population. In this log-inverse-molar scale, **higher values indicate higher toxicity**.
+**LD50** is an environment for evaluating agents on acute oral toxicity prediction. Given a molecule's SMILES string, agents predict the LD50 (Lethal Dose 50%) value in log(1/(mol/kg)). LD50 is the dose required to kill half the test population; in this log-inverse-molar scale, higher values indicate higher toxicity. The dataset is derived from the [TDC LD50_Zhu dataset](https://tdcommons.ai/single_pred_tasks/tox/).
 
-## Data Source
+## Capabilities
 
-All data comes from the [TDC LD50_Zhu dataset](https://tdcommons.ai/benchmark/admet_group/19ld50/) (Zhu et al.), containing 7,342 unique molecules with experimentally measured LD50 values. Units are `log(1/(mol/kg))` as documented by TDC.
+- Predicting acute oral toxicity (LD50) from molecular SMILES notation
+- Quantitative molecular property prediction
+- Understanding structure-toxicity relationships
 
-1,100 molecules sampled (1,000 train + 100 test), shuffled with `random_state=42`.
+## Compute Requirements
 
-### Data Statistics
+LD50Predict does not require a sandbox. It has minimal compute requirements.
 
-| Split | Tasks | Answer Range | Mean | Median |
-|-------|-------|-------------|------|--------|
-| Train | 1,000 | [-0.34, 5.47] | 2.50 | 2.32 |
-| Test | 100 | [0.70, 5.40] | 2.64 | 2.52 |
+## License
 
-All values in log(1/(mol/kg)). Higher = more toxic.
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
-## Reward Function
+## Tasks
 
-MAE-based reward (matches TDC benchmark metric). Since values are in log scale, absolute error is the natural metric:
+There are two splits: train (1,000 tasks) and test (100 tasks), totaling 1,100 tasks. Each task provides a molecule's SMILES string and asks the agent to predict its LD50 value in log(1/(mol/kg)). Tasks are sampled from the [TDC LD50_Zhu dataset](https://tdcommons.ai/single_pred_tasks/tox/) (7,385 unique molecules).
 
-```
-reward = 1 / cosh(|predicted - actual|)
-```
+## Reward Structure
 
-| MAE (log units) | Reward |
-|----------------|--------|
+This is a sparse, verifiable reward environment with continuous scoring. The agent calls `submit_prediction` once with a predicted LD50 value. The reward is based on absolute error using inverse hyperbolic cosine scaling:
+
+$$\text{Reward} = \frac{1}{\cosh(|\hat{y} - y|)}$$
+
+| Absolute Error (log units) | Reward |
+|---------------------------|--------|
 | 0.0 (exact) | 1.000 |
-| 0.3 | 0.957 |
 | 0.5 | 0.887 |
 | 1.0 | 0.648 |
-| 1.5 | 0.425 |
 | 2.0 | 0.266 |
 
-## Environment API
+We do not use LLM graders for this task.
 
-- **Splits:** `train` (1,000 tasks), `test` (100 tasks)
-- **Tool:** `submit_prediction(prediction: float)` — submit LD50 in log(1/(mol/kg))
-- **Prompt:** Provides SMILES string and property description
-- **Finished:** Always `True` after one tool call (single-turn)
+## Data
 
-## Files
+Task data is derived from the [TDC LD50_Zhu dataset](https://tdcommons.ai/single_pred_tasks/tox/), containing experimentally measured LD50 values for 7,385 molecules. Values are in log(1/(mol/kg)). Data files are stored on the OpenReward platform.
 
+## Tools
+
+Agents are given a single tool:
+
+- `submit_prediction`: Submit a predicted LD50 value in log(1/(mol/kg)). Returns the reward based on prediction accuracy. This tool can only be called once per task.
+
+## Time Horizon
+
+LD50Predict is a single-turn environment. The agent receives a molecule and submits one prediction. Each task requires exactly one tool call.
+
+## Environment Difficulty
+
+[Statistics on environment difficulty here]
+
+## Other Environment Requirements
+
+There are no further environment requirements; LD50Predict works out of the box with the OpenReward endpoint.
+
+## Safety
+
+Agents in LD50Predict are asked to predict toxicity values for molecules. The environment does not present direct safety risks, as agents only provide numerical predictions with no access to external systems. However, agents trained on toxicity prediction may acquire knowledge relevant to identifying harmful compounds. The environment evaluates existing published data and does not generate novel toxicity information.
+
+## Citations
+
+```bibtex
+@dataset{GRLD50,
+  author    = {General Reasoning Inc. Team},
+  title     = {LD50},
+  year      = {2026},
+  publisher = {OpenReward},
+  url       = {https://openreward.ai/GeneralReasoning/LD50}
+}
 ```
-ld50predict/
-├── ld50predict.py     # Environment class (LD50Predict)
-├── server.py          # Server wrapper
-├── test_agent.py      # OpenAI Responses API test harness
-├── prepare_data.py    # TDC download + JSON generation script
-├── requirements.txt   # openreward, pydantic
-├── Dockerfile
-├── DATA_UPLOAD.md     # Cloud storage upload instructions
-└── data/
-    ├── train.json     # 1,000 training tasks
-    └── test.json      # 100 test tasks
-```
 
-## Local Development
-
-```bash
-# Generate data (requires PyTDC)
-pip install PyTDC pandas
-python prepare_data.py
-
-# Run server
-pip install -r requirements.txt
-python server.py
-
-# Test with agent
-export OPENAI_API_KEY=...
-python test_agent.py
-```
-
-## Docker
-
-```bash
-docker build -t ld50predict:test .
-docker run -p 8080:8080 ld50predict:test
+```bibtex
+@article{zhu2009quantitative,
+  title={Quantitative structure-activity relationship modeling of rat acute toxicity by oral exposure},
+  author={Zhu, Hao and Martin, Todd M and Ye, Lin and Sedykh, Alexander and Young, Douglas M and Tropsha, Alexander},
+  journal={Chemical Research in Toxicology},
+  volume={22},
+  number={12},
+  pages={1913--1921},
+  year={2009},
+  publisher={ACS Publications}
+}
 ```
