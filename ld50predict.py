@@ -27,6 +27,10 @@ from openreward.environments import (
     tool,
 )
 
+# Reward for a submission made after the task has already been graded. Negative
+# so repeat submissions are actively discouraged, not merely left unscored.
+REPEAT_SUBMISSION_PENALTY = -0.1
+
 if os.path.exists("/orwd_data"):
     ENV_PATH = Path("/orwd_data")
 else:
@@ -89,6 +93,11 @@ class LD50Predict(Environment):
 
         self.answer = ANSWERS[self.validated.task_id]
 
+        # Graded submissions this session. Only the first is rewarded: the
+        # reward 1/cosh(|predicted - actual|) is reported to 4dp and is
+        # invertible, so two probes recover the target value exactly.
+        self.submitted = 0
+
     @classmethod
     def list_splits(cls) -> list[Split]:
         return [
@@ -111,6 +120,16 @@ class LD50Predict(Environment):
     @tool
     async def submit_prediction(self, params: SubmitPredictionInput) -> ToolOutput:
         """Submit your predicted LD50 value for the molecule."""
+        if self.submitted > 0:
+            return ToolOutput(
+                blocks=[TextBlock(text="A prediction has already been submitted for this task. "
+                                       "This episode is over: it is not re-graded, and repeat "
+                                       "submissions are penalised (reward -0.1).")],
+                metadata={"already_submitted": True, "submission_count": self.submitted},
+                reward=REPEAT_SUBMISSION_PENALTY,
+                finished=True,
+            )
+
         predicted = params.prediction
         actual = self.answer["value"]
         reward = self._compute_reward(predicted, actual)
@@ -120,6 +139,8 @@ class LD50Predict(Environment):
             f"Reward: {reward:.4f}\n\n"
             f"Property: LD50 Acute Oral Toxicity ({self.validated.property_units})"
         )
+
+        self.submitted += 1
 
         return ToolOutput(
             blocks=[TextBlock(text=feedback)],
