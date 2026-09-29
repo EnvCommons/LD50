@@ -62,6 +62,13 @@ ANSWERS = {
 print(f"Loaded {len(ANSWERS)} LD50Predict tasks")
 
 
+def sech(x: float) -> float:
+    """1/cosh(x), written so it underflows to 0.0 instead of raising
+    OverflowError for large |x|."""
+    e = math.exp(-abs(x))
+    return 2.0 * e / (1.0 + e * e)
+
+
 class LD50PredictTaskSpec(BaseModel):
     task_id: str
     smiles: str
@@ -131,6 +138,17 @@ class LD50Predict(Environment):
             )
 
         predicted = params.prediction
+        if not math.isfinite(predicted):
+            # Not graded and not counted as the attempt, so the episode stays open.
+            return ToolOutput(
+                blocks=[TextBlock(text=f"Invalid prediction: {predicted} is not a finite number. "
+                                       "It was not graded; you can resubmit a finite "
+                                       "numerical value.")],
+                metadata={"error": "non_finite_prediction"},
+                reward=0.0,
+                finished=False,
+            )
+
         actual = self.answer["value"]
         reward = self._compute_reward(predicted, actual)
 
@@ -148,7 +166,6 @@ class LD50Predict(Environment):
                 "task_id": self.validated.task_id,
                 "smiles": self.validated.smiles,
                 "predicted": predicted,
-                "actual": actual,
                 "reward": reward,
             },
             reward=reward,
@@ -166,5 +183,5 @@ class LD50Predict(Environment):
         - MAE 2.0 -> 0.266
         """
         mae = abs(predicted - actual)
-        reward = 1.0 / math.cosh(mae)
+        reward = sech(mae)
         return round(reward, 4)

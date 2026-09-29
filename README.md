@@ -47,7 +47,7 @@ Task data is derived from the [TDC LD50_Zhu dataset](https://tdcommons.ai/single
 
 Agents are given a single tool:
 
-- `submit_prediction`: Submit a predicted LD50 value in log(1/(mol/kg)). Returns the reward based on prediction accuracy. This tool can only be called once per task.
+- `submit_prediction`: Submit a predicted LD50 value in log(1/(mol/kg)). Returns the reward based on prediction accuracy. A non-finite prediction (NaN or infinity) is rejected without grading and can be resubmitted; the first graded prediction ends the episode.
 
 ## Time Horizon
 
